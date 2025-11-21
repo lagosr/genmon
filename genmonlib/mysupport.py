@@ -9,6 +9,12 @@
 # MODIFICATIONS:
 # -------------------------------------------------------------------------------
 
+"""
+Module containing the `MySupport` class which provides utility functions
+including file operations, network status, thread management, and
+regular expression validation.
+"""
+
 import collections
 import getopt
 import os
@@ -17,6 +23,7 @@ import sys
 import threading
 import time
 import re
+from typing import Optional, List, Dict, Union, Any, Tuple
 
 from genmonlib.mycommon import MyCommon
 from genmonlib.myconfig import MyConfig
@@ -27,17 +34,43 @@ from genmonlib.program_defaults import ProgramDefaults
 # Fix Python 2.x. unicode type
 if sys.version_info[0] >= 3:  # PYTHON 3
     unicode = str
-# ------------ MySupport class --------------------------------------------------
-class MySupport(MyCommon):
-    def __init__(self, simulation=False):
-        super(MySupport, self).__init__()
-        self.Simulation = simulation
-        self.CriticalLock = threading.Lock()  # Critical Lock (writing conf file)
 
-    # ------------ MySupport::LogToFile------------------------------------------
-    def LogToFile(self, File, *argv):
+
+class MySupport(MyCommon):
+    """
+    A support class providing miscellaneous utility methods.
+
+    Inherits from `MyCommon`.
+
+    Attributes:
+        Simulation (bool): Flag to indicate if running in simulation mode.
+        CriticalLock (threading.Lock): A lock for critical operations.
+    """
+
+    def __init__(self, simulation: bool = False):
+        """
+        Initializes the MySupport instance.
+
+        Args:
+            simulation (bool, optional): Simulation mode flag. Defaults to False.
+        """
+        super(MySupport, self).__init__()
+        self.Simulation: bool = simulation
+        self.CriticalLock: threading.Lock = threading.Lock()  # Critical Lock (writing conf file)
+
+    def LogToFile(self, File: str, *argv: str) -> str:
+        """
+        Logs arguments to a specified CSV-style file.
+
+        Args:
+            File (str): The path to the log file.
+            *argv (str): Variable number of string arguments to log.
+
+        Returns:
+            str: Empty string.
+        """
         if self.Simulation:
-            return
+            return ""
         if not len(File):
             return ""
 
@@ -57,20 +90,34 @@ class MySupport(MyCommon):
                 LogFile.flush()
         except Exception as e1:
             self.LogError("Error in  LogToFile : File: %s: %s " % (File, str(e1)))
+        return ""
 
-    # ------------ MySupport::CopyFile-------------------------------------------
     @staticmethod
-    def CopyFile(source, destination, move=False, log=None):
+    def CopyFile(
+        source: str, destination: str, move: bool = False, log: Any = None
+    ) -> bool:
+        """
+        Copies or moves a file from source to destination.
 
+        Args:
+            source (str): Source file path.
+            destination (str): Destination file path.
+            move (bool, optional): If True, removes source after copy.
+                Defaults to False.
+            log (Any, optional): Logger instance for error reporting.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
         try:
             if not os.path.isfile(source):
-                if log != None:
+                if log is not None:
                     log.error("Error in CopyFile : source file not found.")
                 return False
 
             path = os.path.dirname(destination)
             if not os.path.isdir(path):
-                if log != None:
+                if log is not None:
                     log.error("Creating " + path)
                 os.mkdir(path)
             with os.fdopen(os.open(source, os.O_RDONLY), "r") as source_fd:
@@ -86,18 +133,26 @@ class MySupport(MyCommon):
                 os.remove(source)
             return True
         except Exception as e1:
-            if log != None:
+            if log is not None:
                 log.error("Error in CopyFile : " + str(source) + " : " + str(e1))
             return False
 
-    # ------------ MySupport::GetSiteName----------------------------------------
-    def GetSiteName(self):
+    def GetSiteName(self) -> str:
+        """
+        Retrieves the site name (assumed to be set elsewhere in subclass).
+
+        Returns:
+            str: The site name.
+        """
         return self.SiteName
 
-    # ------------------------ MySupport::IsLoaded -----------------------------
-    # return true if program is already loaded
-    def IsLoaded(self):
+    def IsLoaded(self) -> bool:
+        """
+        Checks if the program is already loaded by checking the server port.
 
+        Returns:
+            bool: True if the port is in use, False otherwise.
+        """
         Socket = None
 
         try:
@@ -107,15 +162,25 @@ class MySupport(MyCommon):
             Socket.connect((ProgramDefaults.LocalHost, self.ServerSocketPort))
             Socket.close()
             return True
-        except Exception as e1:
-            if Socket != None:
+        except Exception:
+            if Socket is not None:
                 Socket.close()
             return False
 
-    # ------------ MySupport::GetPlatformStats ----------------------------------
-    def GetPlatformStats(self, usemetric=None, JSONNum=False):
+    def GetPlatformStats(
+        self, usemetric: Optional[bool] = None, JSONNum: bool = False
+    ) -> List[Dict]:
+        """
+        Retrieves platform statistics (CPU temp, etc.).
 
-        if not usemetric == None:
+        Args:
+            usemetric (bool, optional): Override default metric setting.
+            JSONNum (bool, optional): Unused in current implementation.
+
+        Returns:
+            List[Dict]: List of platform info dictionaries.
+        """
+        if usemetric is not None:
             bMetric = usemetric
         else:
             bMetric = self.UseMetric
@@ -123,17 +188,29 @@ class MySupport(MyCommon):
 
         return Platform.GetInfo(JSONNum=JSONNum)
 
-    # ----------  MySupport::RegExIsValid---------------------------------
-    def RegExIsValid(self, input_str):
+    def RegExIsValid(self, input_str: str) -> bool:
+        """
+        Validates if a string is a valid regular expression.
+
+        Args:
+            input_str (str): The regex string to check.
+
+        Returns:
+            bool: True if valid, False otherwise.
+        """
         try:
             re.compile(input_str)
             return True
-        except Exception as e1:
+        except Exception:
             return False
-    # ---------- MySupport::InternetConnected------------------------------------
-    # Note: this function, if the internet connection is not present could
-    # take some time to complete due to the network timeout
-    def InternetConnected(self):
+
+    def InternetConnected(self) -> str:
+        """
+        Checks for internet connectivity.
+
+        Returns:
+            str: "OK" if connected, "Disconnected" or error message otherwise.
+        """
         try:
             if MyPlatform.InternetConnected():
                 Status = "OK"
@@ -144,9 +221,13 @@ class MySupport(MyCommon):
         except Exception as e1:
             return "Unknown" + ":" + str(e1)
 
-    # ---------- MySupport::GetDeadThreadName------------------------------------
-    def GetDeadThreadName(self):
+    def GetDeadThreadName(self) -> str:
+        """
+        Returns a string listing threads that are not alive.
 
+        Returns:
+            str: Names of dead threads or a success message.
+        """
         RetStr = ""
         ThreadNames = ""
         for Name, MyThreadObj in self.Threads.items():
@@ -159,12 +240,20 @@ class MySupport(MyCommon):
 
         return RetStr
 
-    # ---------- MySupport::KillThread------------------------------------------
-    def KillThread(self, Name, CleanupSelf=False):
+    def KillThread(self, Name: str, CleanupSelf: bool = False) -> Union[bool, None]:
+        """
+        Stops and waits for a thread to finish.
 
+        Args:
+            Name (str): The name of the thread to kill.
+            CleanupSelf (bool, optional): If True, skips stop/wait. Defaults to False.
+
+        Returns:
+            Union[bool, None]: False if thread not found, None on success.
+        """
         try:
             MyThreadObj = self.Threads.get(Name, None)
-            if MyThreadObj == None:
+            if MyThreadObj is None:
                 self.LogError("Error getting thread name in KillThread: " + Name)
                 return False
 
@@ -175,46 +264,73 @@ class MySupport(MyCommon):
             self.LogError("Error in KillThread ( " + Name + "): " + str(e1))
             return
 
-    # ---------------------MySupport::StartAllThreads----------------------------
-    def StartAllThreads(self):
-
+    def StartAllThreads(self) -> None:
+        """Starts all managed threads."""
         for key, ThreadInfo in self.Threads.items():
             ThreadInfo.Start()
 
-    # ---------- MySupport:: AreThreadsAlive-------------------------------------
-    # ret true if all threads are alive
-    def AreThreadsAlive(self):
+    def AreThreadsAlive(self) -> bool:
+        """
+        Checks if all managed threads are alive.
 
+        Returns:
+            bool: True if all threads are alive, False otherwise.
+        """
         for Name, MyThreadObj in self.Threads.items():
             if not MyThreadObj.IsAlive():
                 return False
 
         return True
 
-    # ---------- MySupport::IsStopSignaled--------------------------------------
-    def IsStopSignaled(self, Name):
+    def IsStopSignaled(self, Name: str) -> bool:
+        """
+        Checks if a specific thread has been signaled to stop.
 
+        Args:
+            Name (str): The name of the thread.
+
+        Returns:
+            bool: True if signaled to stop, False otherwise.
+        """
         Thread = self.Threads.get(Name, None)
-        if Thread == None:
+        if Thread is None:
             self.LogError("Error getting thread name in IsStopSignaled: " + Name)
             return False
 
         return Thread.StopSignaled()
 
-    # ---------- MySupport::WaitForExit-----------------------------------------
-    def WaitForExit(self, Name, timeout=None):
+    def WaitForExit(self, Name: str, timeout: Optional[float] = None) -> bool:
+        """
+        Waits for a thread's stop event.
 
+        Args:
+            Name (str): The name of the thread.
+            timeout (float, optional): Wait timeout in seconds.
+
+        Returns:
+            bool: True if stop signal received, False if timed out.
+        """
         Thread = self.Threads.get(Name, None)
-        if Thread == None:
+        if Thread is None:
             self.LogError("Error getting thread name in WaitForExit: " + Name)
             return False
 
         return Thread.Wait(timeout)
 
-    # ------------ MySupport::UnitsOut ------------------------------------------
-    # output data based on the NoString flag, in put is a string value with units
-    def UnitsOut(self, input, type=None, NoString=False):
+    def UnitsOut(
+        self, input: str, type: Optional[type] = None, NoString: bool = False
+    ) -> Union[str, Dict[str, Any]]:
+        """
+        Parses a string with units (e.g., "5 kW") and formats it.
 
+        Args:
+            input (str): The input string with value and units.
+            type (type, optional): The type to cast the value to (int or float).
+            NoString (bool, optional): If True, returns a dictionary structure.
+
+        Returns:
+            Union[str, Dict]: Formatted string or dictionary.
+        """
         try:
             if not NoString:
                 return input
@@ -243,12 +359,21 @@ class MySupport(MyCommon):
             self.LogErrorLine("Error in SplitUnits: " + str(e1))
             return input
 
-    # ------------ MySupport::ValueOut ------------------------------------------
-    # output data based on NoString flag, either return a string with a unit or a
-    # numeric value
-    def ValueOut(self, value, unit, NoString=False):
-        try:
+    def ValueOut(
+        self, value: Any, unit: str, NoString: bool = False
+    ) -> Union[str, Dict[str, Any]]:
+        """
+        Formats a value and unit.
 
+        Args:
+            value (Any): The numeric value.
+            unit (str): The unit string.
+            NoString (bool, optional): If True, returns a dict instead of a string.
+
+        Returns:
+            Union[str, Dict]: Formatted string "val unit" or dict representation.
+        """
+        try:
             if NoString:
                 ReturnDict = collections.OrderedDict()
                 ReturnDict["unit"] = unit
@@ -290,9 +415,22 @@ class MySupport(MyCommon):
             self.LogErrorLine("Error in ValueOut: " + str(e1))
             return DefaultReturn
 
-    # -------------MySupport:GetIntFromString------------------------------------
-    def GetIntFromString(self, input_string, byte_offset, length=1, decimal=False):
+    def GetIntFromString(
+        self, input_string: str, byte_offset: int, length: int = 1, decimal: bool = False
+    ) -> int:
+        """
+        Parses an integer from a hex string at a specific offset.
 
+        Args:
+            input_string (str): The hex string.
+            byte_offset (int): The byte offset (2 hex chars per byte).
+            length (int, optional): Number of bytes to read. Defaults to 1.
+            decimal (bool, optional): If True, treats the substring as a decimal
+                digit (uncommon usage). Defaults to False.
+
+        Returns:
+            int: The parsed integer.
+        """
         try:
             if len(input_string) < byte_offset + length:
                 self.LogError(
@@ -313,9 +451,16 @@ class MySupport(MyCommon):
             self.LogErrorLine("Error in GetIntFromString: " + str(e1))
             return 0
 
-    # ----------  MySupport::HexStringToString  ---------------------------------
-    def HexStringToString(self, input):
+    def HexStringToString(self, input: str) -> str:
+        """
+        Converts a hex string to an ASCII string.
 
+        Args:
+            input (str): The hex string.
+
+        Returns:
+            str: The decoded ASCII string.
+        """
         try:
             if not len(input):
                 return ""
@@ -333,19 +478,37 @@ class MySupport(MyCommon):
                 self.LogErrorLine("Error in HexStringToString: " + str(e1))
             return ""
 
-    # ----------  MySupport::StringIsHex  ---------------------------------------
-    def StringIsHex(self, input):
+    def StringIsHex(self, input: str) -> bool:
+        """
+        Checks if a string contains valid hex characters.
+
+        Args:
+            input (str): The string to check.
+
+        Returns:
+            bool: True if valid hex, False otherwise.
+        """
         try:
             if " " in input:
                 return False
             int(input, 16)
             return True
-        except:
+        except Exception:
             return False
 
-    # ------------ MySupport::GetDispatchItem -----------------------------------
-    def GetDispatchItem(self, item, key=None):
+    def GetDispatchItem(self, item: Any, key: Optional[str] = None) -> str:
+        """
+        Resolves a dispatch item to a string.
 
+        If the item is callable, it is executed and the result converted to string.
+
+        Args:
+            item (Any): The item to resolve.
+            key (str, optional): The key associated with the item (for logging).
+
+        Returns:
+            str: The resolved string value.
+        """
         NoneType = type(None)
 
         if isinstance(item, str):
@@ -370,22 +533,39 @@ class MySupport(MyCommon):
             )
             self.LogError("Item: " + str(key) + ":" + str(item))
             return ""
-        
-    # ------------ MySupport::IsString -----------------------------------------
-    def IsString(self, inputvalue):
 
+    def IsString(self, inputvalue: Any) -> bool:
+        """
+        Checks if a value behaves like a string (has .lower()).
+
+        Args:
+            inputvalue (Any): The value to check.
+
+        Returns:
+            bool: True if string-like, False otherwise.
+        """
         try:
-            temp = inputvalue.lower()
+            inputvalue.lower()
             return True
-        except:
+        except AttributeError:
             return False
-    # ------------ MySupport::ProcessDispatch -----------------------------------
-    # This function is recursive, it will turn a dict with callable functions into
-    # all of the callable functions resolved to stings (by calling the functions).
-    # If string output is needed instead of a dict output, ProcessDispatchToString
-    # is called
-    def ProcessDispatch(self, node, InputBuffer, indent=0):
 
+    def ProcessDispatch(
+        self, node: Union[Dict, List], InputBuffer: Any, indent: int = 0
+    ) -> Any:
+        """
+        Recursively processes a dictionary structure, resolving callable values.
+
+        If InputBuffer is a string, `ProcessDispatchToString` is called.
+
+        Args:
+            node (Union[Dict, List]): The data structure to process.
+            InputBuffer (Any): The output buffer (Dict or String).
+            indent (int, optional): Indentation level. Defaults to 0.
+
+        Returns:
+            Any: The processed structure or string.
+        """
         if isinstance(InputBuffer, str):
             return self.ProcessDispatchToString(node, InputBuffer, indent)
 
@@ -413,11 +593,20 @@ class MySupport(MyCommon):
 
         return InputBuffer
 
-    # ------------ MySupport::ProcessDispatchToString --------------------------
-    # This function is recursive, it will turn a dict with callable functions into
-    # a printable string with indentation and formatting
-    def ProcessDispatchToString(self, node, InputBuffer, indent=0):
+    def ProcessDispatchToString(
+        self, node: Union[Dict, List], InputBuffer: str, indent: int = 0
+    ) -> str:
+        """
+        Recursively processes a dictionary structure into a formatted string.
 
+        Args:
+            node (Union[Dict, List]): The data structure.
+            InputBuffer (str): The accumulating string buffer.
+            indent (int, optional): Indentation level. Defaults to 0.
+
+        Returns:
+            str: The formatted string.
+        """
         if not isinstance(InputBuffer, str):
             return ""
 
@@ -462,9 +651,17 @@ class MySupport(MyCommon):
             )
         return InputBuffer
 
-    # ----------  Controller::GetNumBitsChanged----------------------------------
-    def GetNumBitsChanged(self, FromValue, ToValue):
+    def GetNumBitsChanged(self, FromValue: str, ToValue: str) -> Tuple[int, int]:
+        """
+        Calculates the number of bits changed between two hex values.
 
+        Args:
+            FromValue (str): Original hex value.
+            ToValue (str): New hex value.
+
+        Returns:
+            Tuple[int, int]: (Number of bits changed, The mask of changed bits).
+        """
         if not len(FromValue) or not len(ToValue):
             return 0, 0
         MaskBitsChanged = int(FromValue, 16) ^ int(ToValue, 16)
@@ -476,23 +673,38 @@ class MySupport(MyCommon):
 
         return count, MaskBitsChanged
 
-    # ----------  MySupport::GetDeltaTimeMinutes-------------------------------
-    def GetDeltaTimeMinutes(self, DeltaTime):
+    def GetDeltaTimeMinutes(self, DeltaTime: datetime.timedelta) -> int:
+        """
+        Calculates the difference in minutes from a timedelta object.
 
+        Args:
+            DeltaTime (datetime.timedelta): The time delta.
+
+        Returns:
+            int: Total minutes.
+        """
         try:
             total_sec = DeltaTime.total_seconds()
             return int(total_sec / 60)
-        except:
+        except Exception:
             days, seconds = float(DeltaTime.days), float(DeltaTime.seconds)
             delta_hours = days * 24.0 + seconds // 3600.0
             delta_minutes = (seconds % 3600.0) // 60.0
 
-            return delta_hours * 60.0 + delta_minutes
+            return int(delta_hours * 60.0 + delta_minutes)
 
-    # ---------------------MySupport::ReadCSVFile--------------------------------
-    # read a CSV file, return a list of lists
-    # lines starting with # will be ignored as they will treated as comments
-    def ReadCSVFile(self, FileName):
+    def ReadCSVFile(self, FileName: str) -> List[List[str]]:
+        """
+        Reads a CSV file into a list of lists.
+
+        Ignores lines starting with '#'.
+
+        Args:
+            FileName (str): Path to the CSV file.
+
+        Returns:
+            List[List[str]]: List of rows, where each row is a list of fields.
+        """
         try:
             ReturnedList = []
             with open(FileName, "r") as CSVFile:
@@ -512,9 +724,13 @@ class MySupport(MyCommon):
             self.LogErrorLine("Error in ReadCSVFile: " + FileName + " : " + str(e1))
             return []
 
-    # ------------ MySupport::GetWANIp-------------------------------------------
-    def GetWANIp(self):
+    def GetWANIp(self) -> str:
+        """
+        Retrieves the WAN IP address using an external service.
 
+        Returns:
+            str: The WAN IP address or "Unknown" on error.
+        """
         try:
             import requests
 
@@ -524,8 +740,13 @@ class MySupport(MyCommon):
             self.LogErrorLine("Error getting WAN IP: " + str(e1))
             return "Unknown"
 
-    # ------------ MySupport::GetNetworkIp---------------------------------------
-    def GetNetworkIp(self):
+    def GetNetworkIp(self) -> str:
+        """
+        Retrieves the local network IP address.
+
+        Returns:
+            str: The local IP address.
+        """
         try:
             return str(
                 (
@@ -551,18 +772,30 @@ class MySupport(MyCommon):
                     + ["no IP found"]
                 )[0]
             )
-        except:
+        except Exception:
             return "Unknown"
 
-    # ------------ MySupport::IsRunning------------------------------------------
     @staticmethod
-    def IsRunning(prog_name, log=None, multi_instance=False):
+    def IsRunning(
+        prog_name: str, log: Any = None, multi_instance: bool = False
+    ) -> bool:
+        """
+        Checks if a process with the given name is currently running.
 
+        Args:
+            prog_name (str): The program name (e.g., "genmon.py").
+            log (Any, optional): Logger instance.
+            multi_instance (bool, optional): If True, always returns False to
+                allow multiple instances. Defaults to False.
+
+        Returns:
+            bool: True if running, False otherwise.
+        """
         if multi_instance:  # do we allow multiple instances
             return False  # return False so the program will load anyway
         try:
             import psutil
-        except:
+        except ImportError:
             return False  # incase psutil is not installed load anyway
         try:
             prog_name = os.path.basename(prog_name)
@@ -577,27 +810,42 @@ class MySupport(MyCommon):
                         ):
                             return True
         except Exception as e1:
-            if log != None:
+            if log is not None:
                 log.error(
                     "Error in IsRunning: " + str(e1) + ": " + MySupport.GetErrorLine()
                 )
                 return True
         return False
 
-    # ---------------------MySupport::GetErrorLine--------------------------------
     @staticmethod
-    def GetErrorLine():
+    def GetErrorLine() -> str:
+        """
+        Static wrapper for fetching exception line info.
+
+        Returns:
+            str: "filename:lineno" or empty string.
+        """
         exc_type, exc_obj, exc_tb = sys.exc_info()
-        if exc_tb == None:
+        if exc_tb is None:
             return ""
         else:
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             lineno = exc_tb.tb_lineno
             return fname + ":" + str(lineno)
 
-    # ------------ MySupport::SetupAddOnProgram----------------------------------
     @staticmethod
-    def SetupAddOnProgram(prog_name):
+    def SetupAddOnProgram(
+        prog_name: str,
+    ) -> Tuple[Any, str, str, int, str, Any]:
+        """
+        Performs standard setup for an add-on program (logging, permissions, args).
+
+        Args:
+            prog_name (str): The name of the program.
+
+        Returns:
+            Tuple: (console_logger, config_file_path, address, port, log_location, file_logger)
+        """
         console = SetupLogger(prog_name + "_console", log_file="", stream=True)
 
         if not MySupport.PermissionsOK():
@@ -665,11 +913,22 @@ class MySupport(MyCommon):
 
         return console, ConfigFilePath, address, port, loglocation, log
 
-    # ---------------------MySupport::GetGenmonInitInfo--------------------------
     @staticmethod
-    def GetGenmonInitInfo(configfilepath=MyCommon.DefaultConfPath, log=None):
+    def GetGenmonInitInfo(
+        configfilepath: str = MyCommon.DefaultConfPath, log: Any = None
+    ) -> Tuple[int, str, bool]:
+        """
+        Reads initialization info from genmon.conf.
 
-        if configfilepath == None or configfilepath == "":
+        Args:
+            configfilepath (str, optional): Path to config directory.
+                Defaults to MyCommon.DefaultConfPath.
+            log (Any, optional): Logger instance.
+
+        Returns:
+            Tuple[int, str, bool]: (server_port, log_path, multi_instance_flag)
+        """
+        if configfilepath is None or configfilepath == "":
             configfilepath = MyCommon.DefaultConfPath
 
         config = MyConfig(
@@ -684,10 +943,14 @@ class MySupport(MyCommon):
         )
         return port, loglocation, multi_instance
 
-    # ---------------------MySupport::PermissionsOK------------------------------
     @staticmethod
-    def PermissionsOK():
+    def PermissionsOK() -> bool:
+        """
+        Checks if the process has sufficient permissions (e.g., root on Linux).
 
+        Returns:
+            bool: True if permissions are sufficient, False otherwise.
+        """
         if MyPlatform.IsOSLinux() and os.geteuid() == 0:
             return True
         if MyPlatform.IsOSWindows():

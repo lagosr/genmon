@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -------------------------------------------------------------------------------
 #    FILE: mycrypto.py
-# PURPOSE: AES Encyption using python cryptography module
+# PURPOSE: AES Encryption using python cryptography module
 #
 #  AUTHOR: Jason G Yates
 #    DATE: 08-23-2020
@@ -12,7 +12,15 @@
 #
 # -------------------------------------------------------------------------------
 
+"""
+Module for AES Encryption/Decryption.
+
+This module provides the `MyCrypto` class which wraps the `cryptography`
+library to perform AES-128 CBC encryption and decryption.
+"""
+
 import sys
+from typing import Optional, Union, Any
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -22,23 +30,53 @@ from genmonlib.mycommon import MyCommon
 
 # ------------ MyCrypto class -------------------------------------------------
 class MyCrypto(MyCommon):
+    """
+    A class for AES encryption and decryption operations.
 
-    # ------------ MyCrypto::init------------------------------------------------
-    def __init__(self, log=None, console=None, key=None, iv=None):
+    Attributes:
+        log (Any): Logger instance.
+        console (Any): Console logger instance.
+        key (bytes): Encryption key (16 bytes for AES-128).
+        iv (bytes): Initialization vector (16 bytes).
+        keysize (int): Key size in bytes.
+        blocksize (int): Block size in bytes.
+        debug (bool): Debug mode flag.
+        backend (Any): Cryptography backend.
+        cipher (Cipher): Cipher instance.
+        decryptor (Any): Decryptor context.
+        encryptor (Any): Encryptor context.
+    """
+
+    def __init__(
+        self,
+        log: Any = None,
+        console: Any = None,
+        key: Optional[bytes] = None,
+        iv: Optional[bytes] = None,
+    ):
+        """
+        Initializes the MyCrypto instance.
+
+        Args:
+            log (Any, optional): Logger instance. Defaults to None.
+            console (Any, optional): Console logger instance. Defaults to None.
+            key (bytes, optional): AES key. Defaults to None.
+            iv (bytes, optional): Initialization vector. Defaults to None.
+        """
         self.log = log
         self.console = console
         self.key = key  # bytes
         self.iv = iv  # bytes
-        self.keysize = len(key)  # in bytes
-        self.blocksize = len(key)  # in bytes
+        self.keysize = len(key) if key else 0 # in bytes
+        self.blocksize = len(key) if key else 0 # in bytes
 
         self.debug = False
         # presently only AES-128 CBC mode is supported
         if self.keysize != 16:
             self.LogError("MyCrypto: WARNING: key size not 128: " + str(self.keysize))
 
-        if len(self.iv) != 16:
-            self.LogError("MyCrypto: WARNING: iv size not 128: " + str(self.keysize))
+        if iv and len(self.iv) != 16:
+            self.LogError("MyCrypto: WARNING: iv size not 128: " + str(len(self.iv)))
         try:
             self.backend = default_backend()
             self.cipher = Cipher(
@@ -51,9 +89,18 @@ class MyCrypto(MyCommon):
             self.LogErrorLine("Error in MyCrypto:init: " + str(e1))
             sys.exit(1)
 
-    # ------------ MyCrypto::Encrypt---------------------------------------------
-    # one block encrypt
-    def Encrypt(self, cleartext, finalize=True):
+    def Encrypt(self, cleartext: bytes, finalize: bool = True) -> Optional[bytes]:
+        """
+        Encrypts a single block of data.
+
+        Args:
+            cleartext (bytes): Data to encrypt (must match keysize).
+            finalize (bool, optional): Whether to finalize the encryption.
+                Defaults to True.
+
+        Returns:
+            Optional[bytes]: Encrypted data or None on error.
+        """
         try:
             if len(cleartext) != self.keysize:
                 self.LogError(
@@ -71,10 +118,18 @@ class MyCrypto(MyCommon):
             self.LogErrorLine("Error in MyCrypto:Encrypt: " + str(e1))
             return None
 
-    # ------------ MyCrypto::Decrypt---------------------------------------------
-    # one block decrypt
-    def Decrypt(self, cyptertext, finalize=True):
+    def Decrypt(self, cyptertext: bytes, finalize: bool = True) -> Optional[bytes]:
+        """
+        Decrypts a single block of data.
 
+        Args:
+            cyptertext (bytes): Data to decrypt (must match keysize).
+            finalize (bool, optional): Whether to finalize the decryption.
+                Defaults to True.
+
+        Returns:
+            Optional[bytes]: Decrypted data or None on error.
+        """
         try:
             if len(cyptertext) != self.keysize:
                 self.LogError(
@@ -93,13 +148,18 @@ class MyCrypto(MyCommon):
             self.LogErrorLine("Error in MyCrypto:Decrypt: " + str(e1))
             return None
 
-    # ------------ MyCrypto::Restart---------------------------------------------
-    def Restart(self, key=None, iv=None):
+    def Restart(self, key: Optional[bytes] = None, iv: Optional[bytes] = None) -> None:
+        """
+        Resets the encryption/decryption context with new or existing keys.
 
+        Args:
+            key (bytes, optional): New key. Defaults to None (keep existing).
+            iv (bytes, optional): New IV. Defaults to None (keep existing).
+        """
         try:
-            if key != None:
+            if key is not None:
                 self.key = key
-            if iv != None:
+            if iv is not None:
                 self.iv = iv
             self.cipher = Cipher(
                 algorithms.AES(self.key), modes.CBC(self.iv), backend=self.backend
@@ -110,12 +170,22 @@ class MyCrypto(MyCommon):
             self.LogErrorLine("Error in MyCrypto:Restart: " + str(e1))
             return None
 
-    # ------------ MyCrypto::EncryptBuff-----------------------------------------
-    # multiple block encrypt
-    def EncryptBuff(self, plaintext_buff, pad_zero=True):
-        try:
+    def EncryptBuff(
+        self, plaintext_buff: bytes, pad_zero: bool = True
+    ) -> Optional[bytes]:
+        """
+        Encrypts a buffer of data (multiple blocks).
 
-            if plaintext_buff == None:
+        Args:
+            plaintext_buff (bytes): Data to encrypt.
+            pad_zero (bool, optional): Whether to pad the last block with zeros.
+                Defaults to True.
+
+        Returns:
+            Optional[bytes]: Encrypted buffer or None on error.
+        """
+        try:
+            if plaintext_buff is None:
                 self.LogError("MyCrypto:EncryptBuff: Error: invalid buffer! ")
                 return None
             if len(plaintext_buff) == 0:
@@ -138,14 +208,19 @@ class MyCrypto(MyCommon):
                     if pad_zero:
                         for i in range(0, (self.blocksize - len(buff))):
                             buff += b"\0"
-                        ct_buf += self.Encrypt(buff)
+                        encrypted_chunk = self.Encrypt(buff)
+                        if encrypted_chunk:
+                            ct_buf += encrypted_chunk
                         break
                     else:
                         # append plain text to cryptotext buffer
                         ct_buf += buff
                     break
                 buff = plaintext_buff[index1:index2]
-                ct_buf += self.Encrypt(buff)
+                encrypted_chunk = self.Encrypt(buff)
+                if encrypted_chunk:
+                    ct_buf += encrypted_chunk
+
                 index1 += self.blocksize
                 index2 += self.blocksize
                 if index1 == len(plaintext_buff):
@@ -156,12 +231,22 @@ class MyCrypto(MyCommon):
             self.LogErrorLine("Error in MyCrypto:EncryptBuff: " + str(e1))
             return None
 
-    # ------------ MyCrypto::DecryptBuff-----------------------------------------
-    # multiple block decrypt
-    def DecryptBuff(self, crypttext_buff, pad_zero=True):
-        try:
+    def DecryptBuff(
+        self, crypttext_buff: bytes, pad_zero: bool = True
+    ) -> Optional[bytes]:
+        """
+        Decrypts a buffer of data (multiple blocks).
 
-            if crypttext_buff == None:
+        Args:
+            crypttext_buff (bytes): Data to decrypt.
+            pad_zero (bool, optional): Whether to pad/handle last block.
+                Defaults to True.
+
+        Returns:
+            Optional[bytes]: Decrypted buffer or None on error.
+        """
+        try:
+            if crypttext_buff is None:
                 self.LogError("MyCrypto:DecryptBuff: Error: invalid buffer! ")
                 return None
             if len(crypttext_buff) < self.blocksize:
@@ -185,14 +270,18 @@ class MyCrypto(MyCommon):
                     if pad_zero:
                         for i in range(0, (self.blocksize - len(buff))):
                             buff += b"\0"
-                        pt_buf += self.Decrypt(buff)
+                        decrypted_chunk = self.Decrypt(buff)
+                        if decrypted_chunk:
+                            pt_buf += decrypted_chunk
                         break
                     else:
                         # append plain text to cryptotext buffer
                         pt_buf += buff
                     break
                 buff = crypttext_buff[index1:index2]
-                pt_buf += self.Decrypt(buff)
+                decrypted_chunk = self.Decrypt(buff)
+                if decrypted_chunk:
+                    pt_buf += decrypted_chunk
                 index1 += self.blocksize
                 index2 += self.blocksize
                 if index1 == len(crypttext_buff):

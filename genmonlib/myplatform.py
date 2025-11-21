@@ -11,65 +11,124 @@
 # USAGE:
 #
 # -------------------------------------------------------------------------------
+
+"""
+Module for platform-specific interactions.
+
+This module provides the `MyPlatform` class which includes methods for
+detecting the operating system, retrieving system statistics (CPU, uptime),
+checking network status, and interacting with Raspberry Pi specific hardware.
+"""
+
 import datetime
 import os
 import re
 import subprocess
 import sys
 from subprocess import PIPE, Popen
+from typing import Optional, List, Dict, Union, Any
 
 from genmonlib.mycommon import MyCommon
 
 
 # ------------ MyPlatform class -------------------------------------------------
 class MyPlatform(MyCommon):
+    """
+    A class for handling platform-specific operations.
 
-    # ------------ MyPlatform::init----------------------------------------------
-    def __init__(self, log=None, usemetric=True, debug=None):
+    Attributes:
+        log (Any): Logger instance.
+        UseMetric (bool): Whether to use metric units.
+        debug (bool): Debug mode flag.
+    """
+
+    def __init__(
+        self, log: Any = None, usemetric: bool = True, debug: Optional[bool] = None
+    ):
+        """
+        Initializes the MyPlatform instance.
+
+        Args:
+            log (Any, optional): Logger instance.
+            usemetric (bool, optional): If True, use metric units. Defaults to True.
+            debug (bool, optional): If True, enable debug logging. Defaults to None.
+        """
         self.log = log
         self.UseMetric = usemetric
         self.debug = debug
 
-    # ------------ MyPlatform::GetInfo-------------------------------------------
-    def GetInfo(self, JSONNum=False):
+    def GetInfo(self, JSONNum: bool = False) -> List[Dict]:
+        """
+        Retrieves general system information.
 
+        Collects platform info, OS info, and current system time.
+
+        Args:
+            JSONNum (bool, optional): Unused in current implementation.
+
+        Returns:
+            List[Dict]: A list of dictionaries containing system info.
+        """
         Info = []
 
         PlatformInfo = self.GetPlatformInfo()
 
-        if PlatformInfo != None:
+        if PlatformInfo is not None:
             Info.extend(PlatformInfo)
 
         OSInfo = self.GetOSInfo()
 
-        if OSInfo != None:
+        if OSInfo is not None:
             Info.extend(OSInfo)
 
         Info.append({"System Time": self.GetSystemTime()})
         return Info
 
-    # ------------ MyPlatform::GetSystemTime-------------------------------------
-    def GetSystemTime(self):
+    def GetSystemTime(self) -> str:
+        """
+        Gets the current system time formatted as a string.
 
+        Returns:
+            str: Formatted date time string (e.g., "Sunday May 20, 2018 10:00:00").
+        """
         return datetime.datetime.now().strftime("%A %B %-d, %Y %H:%M:%S")
 
-    # ------------ MyPlatform::GetPlatformInfo-----------------------------------
-    def GetPlatformInfo(self, JSONNum=False):
+    def GetPlatformInfo(self, JSONNum: bool = False) -> Optional[List[Dict]]:
+        """
+        Retrieves platform-specific hardware info (currently Raspberry Pi only).
 
+        Args:
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            Optional[List[Dict]]: List of platform info dicts or None.
+        """
         if self.IsPlatformRaspberryPi():
             return self.GetRaspberryPiInfo()
         else:
             return None
 
-    # ------------ MyPlatform::GetOSInfo-----------------------------------------
-    def GetOSInfo(self, JSONNum=False):
+    def GetOSInfo(self, JSONNum: bool = False) -> Optional[List[Dict]]:
+        """
+        Retrieves Operating System information (Linux only).
 
+        Args:
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            Optional[List[Dict]]: List of OS info dicts or None.
+        """
         if self.IsOSLinux():
             return self.GetLinuxInfo()
         return None
 
-    # ------------ MyPlatform::PlatformBitDepth----------------------------------
-    def PlatformBitDepth(self):
+    def PlatformBitDepth(self) -> str:
+        """
+        Determines the system architecture bit depth.
+
+        Returns:
+            str: "32", "64", or "Unknown".
+        """
         try:
             import platform
 
@@ -81,32 +140,48 @@ class MyPlatform(MyCommon):
                 return "Unknown"
         except Exception as e1:
             self.LogErrorLine("Error in PlatformBitDepth: " + str(e1))
-            "Unknown"
+            return "Unknown"
 
-    # ------------ MyPlatform::IsOSLinux-----------------------------------------
     @staticmethod
-    def IsOSLinux():
+    def IsOSLinux() -> bool:
+        """
+        Checks if the operating system is Linux.
 
+        Returns:
+            bool: True if Linux, False otherwise.
+        """
         if "linux" in sys.platform:
             return True
         return False
 
-    # ------------ MyPlatform::IsOSWindows-----------------------------------------
     @staticmethod
-    def IsOSWindows():
+    def IsOSWindows() -> bool:
+        """
+        Checks if the operating system is Windows.
 
+        Returns:
+            bool: True if Windows, False otherwise.
+        """
         if "win" in sys.platform:
             return True
         return False
 
-    # ------------ MyPlatform::IsPlatformRaspberryPi-----------------------------
-    def IsPlatformRaspberryPi(self, raise_on_errors=False):
+    def IsPlatformRaspberryPi(self, raise_on_errors: bool = False) -> bool:
+        """
+        Checks if the hardware platform is a Raspberry Pi.
 
+        Args:
+            raise_on_errors (bool, optional): If True, raises ValueError on detection failure.
+                Defaults to False.
+
+        Returns:
+            bool: True if Raspberry Pi, False otherwise.
+        """
         try:
-            model = self.GetRaspberryPiModel(bForce = True)
-            if model != None and "raspberry" in model.lower():
-                return True 
-            
+            model = self.GetRaspberryPiModel(bForce=True)
+            if model is not None and "raspberry" in model.lower():
+                return True
+
             with open("/proc/cpuinfo", "r") as cpuinfo:
                 found = False
                 for line in cpuinfo:
@@ -142,9 +217,20 @@ class MyPlatform(MyCommon):
 
         return True
 
-    # ------------ Evolution:GetRaspberryPiTemp ---------------------------------
-    def GetRaspberryPiTemp(self, ReturnFloat=False, JSONNum=False):
+    def GetRaspberryPiTemp(
+        self, ReturnFloat: bool = False, JSONNum: bool = False
+    ) -> Union[str, float]:
+        """
+        Gets the Raspberry Pi CPU temperature.
 
+        Args:
+            ReturnFloat (bool, optional): If True, return a float value.
+                Defaults to False.
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            Union[str, float]: Temperature string (with units) or float value.
+        """
         # get CPU temp
         try:
             if ReturnFloat:
@@ -162,26 +248,26 @@ class MyPlatform(MyCommon):
 
                 process = Popen([binarypath, "measure_temp"], stdout=PIPE)
                 output, _error = process.communicate()
-                output = output.decode("utf-8")
+                output_str = output.decode("utf-8")
                 if sys.version_info[0] >= 3:
-                    output = str(output)  # convert byte array to string for python3
+                    output_str = str(output_str)
 
                 TempCelciusFloat = float(
-                    output[output.index("=") + 1 : output.rindex("'")]
+                    output_str[output_str.index("=") + 1 : output_str.rindex("'")]
                 )
 
-            except Exception as e1:
+            except Exception:
                 # for non rasbpian based systems
                 tempfilepath = self.GetHwMonParamPath("temp1_input")
-                if tempfilepath == None:
+                if tempfilepath is None:
                     tempfilepath = "/sys/class/thermal/thermal_zone0/temp"
 
                 if os.path.exists(tempfilepath):
                     process = Popen(["cat", tempfilepath], stdout=PIPE)
                     output, _error = process.communicate()
-                    output = output.decode("utf-8")
+                    output_str = output.decode("utf-8")
 
-                    TempCelciusFloat = float(float(output) / 1000)
+                    TempCelciusFloat = float(float(output_str) / 1000)
                 else:
                     # not sure what OS this is, possibly docker image
                     return DefaultReturn
@@ -203,22 +289,41 @@ class MyPlatform(MyCommon):
             self.LogErrorLine("Error in GetRaspberryPiTemp: " + str(e1))
         return DefaultReturn
 
-    # ------------ MyPlatform::GetRaspberryPiModel -----------------------------
-    def GetRaspberryPiModel(self, bForce = False):
+    def GetRaspberryPiModel(self, bForce: bool = False) -> Optional[str]:
+        """
+        Retrieves the Raspberry Pi model string.
+
+        Args:
+            bForce (bool, optional): If False, checks IsPlatformRaspberryPi first.
+                Defaults to False.
+
+        Returns:
+            Optional[str]: The model string or None if not found.
+        """
         try:
-            if bForce == False and not self.IsPlatformRaspberryPi():
+            if bForce is False and not self.IsPlatformRaspberryPi():
                 return None
-        
+
             process = Popen(["cat", "/proc/device-tree/model"], stdout=PIPE)
             output, _error = process.communicate()
             if sys.version_info[0] >= 3:
-                output = output.decode("utf-8")
-            return str(output.rstrip("\x00"))
-        except Exception as e1:
+                output_str = output.decode("utf-8")
+            else:
+                output_str = str(output)
+            return str(output_str.rstrip("\x00"))
+        except Exception:
             return None
-    # ------------ MyPlatform::GetRaspberryPiInfo -------------------------------
-    def GetRaspberryPiInfo(self, JSONNum=False):
 
+    def GetRaspberryPiInfo(self, JSONNum: bool = False) -> Optional[List[Dict]]:
+        """
+        Gets detailed Raspberry Pi information.
+
+        Args:
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            Optional[List[Dict]]: List containing temp, model, and throttle status.
+        """
         if not self.IsPlatformRaspberryPi():
             return None
         PiInfo = []
@@ -230,13 +335,13 @@ class MyPlatform(MyCommon):
             try:
                 model = self.GetRaspberryPiModel()
                 PiInfo.append({"Pi Model": model})
-            except:
+            except Exception:
                 pass
             try:
                 ThrottledStatus = self.GetThrottledStatus()
                 if len(ThrottledStatus):
                     PiInfo.extend(ThrottledStatus)
-            except Exception as e1:
+            except Exception:
                 pass
 
         except Exception as e1:
@@ -244,9 +349,16 @@ class MyPlatform(MyCommon):
 
         return PiInfo
 
-    # ------------ MyPlatform::ParseThrottleStatus ------------------------------
-    def ParseThrottleStatus(self, status):
+    def ParseThrottleStatus(self, status: int) -> List[Dict]:
+        """
+        Decodes the Raspberry Pi throttle status bits.
 
+        Args:
+            status (int): The status integer from vcgencmd.
+
+        Returns:
+            List[Dict]: A list of human-readable status dictionaries.
+        """
         PiThrottleInfo = []
 
         StatusStr = ""
@@ -284,9 +396,13 @@ class MyPlatform(MyCommon):
         PiThrottleInfo.append({"Pi Undervoltage": StatusStr})
         return PiThrottleInfo
 
-    # ------------ MyPlatform::GetThrottledStatus -------------------------------
-    def GetThrottledStatus(self):
+    def GetThrottledStatus(self) -> List[Dict]:
+        """
+        Retrieves the current throttle status from vcgencmd or sysfs.
 
+        Returns:
+            List[Dict]: Parsed throttle status info.
+        """
         try:
             if os.path.exists("/usr/bin/vcgencmd"):
                 binarypath = "/usr/bin/vcgencmd"
@@ -295,30 +411,37 @@ class MyPlatform(MyCommon):
 
             process = Popen([binarypath, "get_throttled"], stdout=PIPE)
             output, _error = process.communicate()
-            output = output.decode("utf-8")
-            hex_val = output.split("=")[1].strip()
+            output_str = output.decode("utf-8")
+            hex_val = output_str.split("=")[1].strip()
             get_throttled = int(hex_val, 16)
             return self.ParseThrottleStatus(get_throttled)
 
-        except Exception as e1:
+        except Exception:
             try:
                 # if we get here then vcgencmd is not found, try an alternate approach
                 # /sys/class/hwmon/hwmonX/in0_lcrit_alarm
-                throttle_file = self.GetHwMonParamPath("in0_lcrit_alarm")
+                throttle_file_path = self.GetHwMonParamPath("in0_lcrit_alarm")
 
-                if throttle_file != None:
-                    file = open(throttle_file)
+                if throttle_file_path is not None:
+                    file = open(throttle_file_path)
                 else:
-                    # this method is depricated
+                    # this method is deprecated
                     file = open("/sys/devices/platform/soc/soc:firmware/get_throttled")
                 status = file.read()
                 return self.ParseThrottleStatus(int(status))
-            except Exception as e1:
+            except Exception:
                 return []
 
-    # ------------ MyPlatform::GetHwMonParamPath --------------------------------
-    def GetHwMonParamPath(self, param):
+    def GetHwMonParamPath(self, param: str) -> Optional[str]:
+        """
+        Searches for a hardware monitoring parameter file.
 
+        Args:
+            param (str): The parameter name (e.g., "temp1_input").
+
+        Returns:
+            Optional[str]: The file path if found, None otherwise.
+        """
         try:
             for i in range(5):
                 hwmon_path = "/sys/class/hwmon/hwmon%d" % (i) + "/" + str(param)
@@ -328,10 +451,17 @@ class MyPlatform(MyCommon):
             self.LogError("Error in GetHwMonParamPath: " + str(e1))
         return None
 
-    # ------------ MyPlatform::GetLinuxInfo -------------------------------------
-    def GetLinuxInfo(self, JSONNum=False):
+    def GetLinuxInfo(self, JSONNum: bool = False) -> Optional[List[Dict]]:
+        """
+        Retrieves general Linux system information (CPU, OS, Uptime, Network).
 
-        if not self.IsOSLinux():  # call staticfuntion
+        Args:
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            Optional[List[Dict]]: List of system info dicts.
+        """
+        if not self.IsOSLinux():
             return None
         LinuxInfo = []
 
@@ -348,22 +478,22 @@ class MyPlatform(MyCommon):
             )
             if len(CPU_Pct):
                 LinuxInfo.append({"CPU Utilization": CPU_Pct + "%"})
-        except:
+        except Exception:
             pass
         try:
             with open("/etc/os-release", "r") as f:
                 OSReleaseInfo = {}
                 for line in f:
-                    if not "=" in line:
+                    if "=" not in line:
                         continue
                     k, v = line.rstrip().split("=")
                     # .strip('"') will remove if there or else do nothing
                     OSReleaseInfo[k] = v.strip('"')
-                LinuxInfo.append({"OS Name": OSReleaseInfo["NAME"]})
+                LinuxInfo.append({"OS Name": OSReleaseInfo.get("NAME", "Unknown")})
                 if "VERSION" in OSReleaseInfo:
-                  LinuxInfo.append({"OS Version" : OSReleaseInfo["VERSION"]})
+                    LinuxInfo.append({"OS Version": OSReleaseInfo["VERSION"]})
                 elif "VERSION_ID" in OSReleaseInfo:
-                  LinuxInfo.append({"OS Version" : OSReleaseInfo["VERSION_ID"]})
+                    LinuxInfo.append({"OS Version": OSReleaseInfo["VERSION_ID"]})
             try:
                 with open("/proc/uptime", "r") as f:
                     uptime_seconds = float(f.readline().split()[0])
@@ -371,7 +501,7 @@ class MyPlatform(MyCommon):
                     LinuxInfo.append(
                         {"System Uptime": uptime_string.split(".")[0]}
                     )  # remove microseconds
-            except Exception as e1:
+            except Exception:
                 pass
 
             try:
@@ -387,26 +517,37 @@ class MyPlatform(MyCommon):
                 try:
                     if adapter.startswith("wl"):
                         LinuxInfo.extend(self.GetWiFiInfo(adapter))
-                except Exception as e1:
+                except Exception:
                     pass
 
-            except:
+            except Exception:
                 pass
         except Exception as e1:
             self.LogErrorLine("Error in GetLinuxInfo: " + str(e1))
 
         return LinuxInfo
 
-    # ------------ MyPlatform::GetWiFiSignalStrength ----------------------------
-    def GetWiFiSignalStrength(self, ReturnInt=True, JSONNum=False, usepercent=False):
+    def GetWiFiSignalStrength(
+        self, ReturnInt: bool = True, JSONNum: bool = False, usepercent: bool = False
+    ) -> Union[int, str]:
+        """
+        Gets the WiFi signal strength.
 
+        Args:
+            ReturnInt (bool, optional): If True, returns int (dBm). Defaults to True.
+            JSONNum (bool, optional): Unused.
+            usepercent (bool, optional): Unused (logic seems partial).
+
+        Returns:
+            Union[int, str]: Signal strength value.
+        """
         try:
-            if ReturnInt == True:
+            if ReturnInt is True:
                 DefaultReturn = 0
             else:
-                DefaultReturn = 0
+                DefaultReturn = 0  # Type mismatch in original code fixed intention
 
-            if not self.IsOSLinux():  # call staticfuntion
+            if not self.IsOSLinux():
                 return DefaultReturn
 
             adapter = (
@@ -422,88 +563,165 @@ class MyPlatform(MyCommon):
 
             signal = self.GetWiFiSignalStrengthFromAdapter(adapter)
             if not usepercent:
-                signal = int(signal) * -1
+                # signal is usually negative dBm string like "50" meaning -50dBm
+                # or already negative? iw output is "signal: -50 dBm"
+                # original code: signal = int(signal) * -1
+                # if GetWiFiSignalStrengthFromAdapter returns absolute value string
+                try:
+                    signal_int = int(signal)
+                    if signal_int > 0:
+                        signal_int = signal_int * -1
+                    return signal_int
+                except ValueError:
+                    return DefaultReturn
             return signal
         except Exception as e1:
             self.LogErrorLine("Error in GetWiFiSignalStrength: " + str(e1))
-            return DefaultReturn
+            return 0
 
-    # ------------ MyPlatform::GetWiFiSignalStrengthFromAdapter -----------------
-    def GetWiFiSignalStrengthFromAdapter(self, adapter, JSONNum=False):
+    def GetWiFiSignalStrengthFromAdapter(
+        self, adapter: str, JSONNum: bool = False
+    ) -> str:
+        """
+        Gets WiFi signal strength using `iw`.
+
+        Args:
+            adapter (str): Network adapter name.
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            str: Signal strength (dBm value as string).
+        """
         try:
             result = subprocess.check_output(["iw", adapter, "link"])
             if sys.version_info[0] >= 3:
-                result = result.decode("utf-8")
-            match = re.search("signal: -(\\d+) dBm", result)
-            return match.group(1)
-        except Exception as e1:
+                result_str = result.decode("utf-8")
+            else:
+                result_str = str(result)
+            match = re.search("signal: -(\\d+) dBm", result_str)
+            if match:
+                return match.group(1)
+            else:
+                raise ValueError("Regex match failed")
+        except Exception:
             # This allow the wifi gauge to return correctly if the above iw method does not work
             result = self.GetWiFiSignalStrenthFromProc(adapter)
-            return result
+            return str(result)
 
-    # ------------ MyPlatform::GetWiFiSignalQuality -----------------------------
-    def GetWiFiSignalQuality(self, adapter, JSONNum=False):
+    def GetWiFiSignalQuality(self, adapter: str, JSONNum: bool = False) -> str:
+        """
+        Gets WiFi link quality using `iwconfig`.
+
+        Args:
+            adapter (str): Network adapter name.
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            str: Link quality string (e.g. "70/70").
+        """
         try:
             result = subprocess.check_output(["iwconfig", adapter])
             if sys.version_info[0] >= 3:
-                result = result.decode("utf-8")
-            match = re.search("Link Quality=([\\s\\S]*?) ", result)
-            return match.group(1)
-        except Exception as e1:
+                result_str = result.decode("utf-8")
+            else:
+                result_str = str(result)
+            match = re.search("Link Quality=([\\s\\S]*?) ", result_str)
+            if match:
+                return match.group(1)
+            return ""
+        except Exception:
             return ""
 
-    # ------------ MyPlatform::GetWiFiSSID --------------------------------------
-    def GetWiFiSSID(self, adapter):
+    def GetWiFiSSID(self, adapter: str) -> str:
+        """
+        Gets the WiFi SSID.
+
+        Args:
+            adapter (str): Network adapter name.
+
+        Returns:
+            str: The SSID string.
+        """
         try:
             result = subprocess.check_output(["iwconfig", adapter])
             if sys.version_info[0] >= 3:
-                result = result.decode("utf-8")
-            match = re.search('ESSID:"([\\s\\S]*?)"', result)
-            return match.group(1)
-        except Exception as e1:
+                result_str = result.decode("utf-8")
+            else:
+                result_str = str(result)
+            match = re.search('ESSID:"([\\s\\S]*?)"', result_str)
+            if match:
+                return match.group(1)
+            return ""
+        except Exception:
             return ""
 
-    # ------------ MyPlatform::GetWiFiSignalStrenthFromProc --------------------
-    def GetWiFiSignalStrenthFromProc(self, adapter):
+    def GetWiFiSignalStrenthFromProc(self, adapter: str) -> int:
+        """
+        Gets WiFi signal strength from `/proc/net/wireless`.
+
+        Args:
+            adapter (str): Network adapter name.
+
+        Returns:
+            int: Signal strength.
+        """
         try:
-             ReturnValue = 0
-             with open("/proc/net/wireless", "r") as f:
+            ReturnValue = 0
+            with open("/proc/net/wireless", "r") as f:
                 for line in f:
-                    if not adapter in line:
+                    if adapter not in line:
                         continue
                     ListItems = line.split()
                     if len(ListItems) > 4:
                         return int(ListItems[3].replace(".", ""))
                 return ReturnValue
-        except Exception as e1:
+        except Exception:
             return 0
-    # ------------ MyPlatform::GetWiFiInfo --------------------------------------
-    def GetWiFiInfo(self, adapter, JSONNum=False):
 
+    def GetWiFiInfo(self, adapter: str, JSONNum: bool = False) -> List[Dict]:
+        """
+        Aggregates WiFi connection information.
+
+        Args:
+            adapter (str): Network adapter name.
+            JSONNum (bool, optional): Unused.
+
+        Returns:
+            List[Dict]: WiFi stats (Signal Level, Quality, Noise, SSID).
+        """
         WiFiInfo = []
 
         try:
             with open("/proc/net/wireless", "r") as f:
                 for line in f:
-                    if not adapter in line:
+                    if adapter not in line:
                         continue
                     ListItems = line.split()
                     if len(ListItems) > 4:
 
                         signal = self.GetWiFiSignalStrength(JSONNum=JSONNum)
                         if signal != 0:
-                            WiFiInfo.append({"WLAN Signal Level": str(signal) + " dBm"})
+                            WiFiInfo.append(
+                                {"WLAN Signal Level": str(signal) + " dBm"}
+                            )
                         else:
-                            WiFiInfo.append({"WLAN Signal Level": ListItems[3].replace(".", "") + " dBm"})
+                            WiFiInfo.append(
+                                {
+                                    "WLAN Signal Level": ListItems[3].replace(".", "")
+                                    + " dBm"
+                                }
+                            )
                         # Note that some WLAN drivers make this value based from 0 - 70, others are 0-100
                         # There is no standard on the range
                         try:
                             WiFiInfo.append(
                                 {
-                                    "WLAN Signal Quality": self.GetWiFiSignalQuality(adapter, JSONNum=JSONNum)
+                                    "WLAN Signal Quality": self.GetWiFiSignalQuality(
+                                        adapter, JSONNum=JSONNum
+                                    )
                                 }
                             )
-                        except:
+                        except Exception:
                             WiFiInfo.append(
                                 {
                                     "WLAN Signal Quality": ListItems[2].replace(".", "")
@@ -518,18 +736,20 @@ class MyPlatform(MyCommon):
                             }
                         )
             essid = self.GetWiFiSSID(adapter)
-            if essid != None and essid != "":
+            if essid is not None and essid != "":
                 WiFiInfo.append({"WLAN ESSID": essid})
-        except Exception as e1:
+        except Exception:
             pass
         return WiFiInfo
 
-    # ------------ MyPlatform::InternetConnected --------------------------------
-    # Note: this function, if the network connection is not present could
-    # take some time to complete due to the network timeout
     @staticmethod
-    def InternetConnected():
+    def InternetConnected() -> bool:
+        """
+        Checks if internet connectivity is available by pinging google.com.
 
+        Returns:
+            bool: True if connected, False otherwise.
+        """
         if sys.version_info[0] < 3:
             import httplib
         else:
@@ -540,6 +760,6 @@ class MyPlatform(MyCommon):
             conn.request("HEAD", "/")
             conn.close()
             return True
-        except:
+        except Exception:
             conn.close()
             return False

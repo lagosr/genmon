@@ -10,25 +10,58 @@
 #
 # -------------------------------------------------------------------------------
 
+"""
+Module for configuration file abstraction.
+
+This module provides the `MyConfig` class to read and write configuration
+values using standard INI file formats. It wraps `configparser`.
+"""
+
 import sys
 import threading
-
-if sys.version_info[0] < 3:
-    from ConfigParser import ConfigParser
-else:
-    from configparser import ConfigParser
-
-from genmonlib.mycommon import MyCommon
+from typing import Optional, Any, List, Tuple, Union, Type
 
 # Fix Python 2.x. unicode type
 if sys.version_info[0] >= 3:  # PYTHON 3
+    from configparser import ConfigParser
     unicode = str
+else:
+    from ConfigParser import ConfigParser
+
+from genmonlib.mycommon import MyCommon
 
 
 class MyConfig(MyCommon):
-    # ---------------------MyConfig::__init__------------------------------------
-    def __init__(self, filename=None, section=None, simulation=False, log=None):
+    """
+    A wrapper class for configuration file handling.
 
+    Provides thread-safe reading and writing of configuration values.
+
+    Attributes:
+        FileName (str): Path to the configuration file.
+        Section (str): The default section to read/write.
+        Simulation (bool): If True, prevents writing to files.
+        CriticalLock (threading.Lock): Lock for file write operations.
+        InitComplete (bool): Flag indicating if initialization was successful.
+        config (ConfigParser): The underlying config parser object.
+    """
+
+    def __init__(
+        self,
+        filename: Optional[str] = None,
+        section: Optional[str] = None,
+        simulation: bool = False,
+        log: Any = None
+    ):
+        """
+        Initializes the MyConfig object.
+
+        Args:
+            filename (str, optional): Path to the config file.
+            section (str, optional): Default section name.
+            simulation (bool, optional): Simulation mode flag.
+            log (Any, optional): Logger instance.
+        """
         super(MyConfig, self).__init__()
         self.log = log
         self.FileName = filename
@@ -41,9 +74,11 @@ class MyConfig(MyCommon):
                 self.config = ConfigParser()
             else:
                 self.config = ConfigParser(interpolation=None)
-            self.config.read(self.FileName)
 
-            if self.Section == None:
+            if self.FileName:
+                self.config.read(self.FileName)
+
+            if self.Section is None:
                 SectionList = self.GetSections()
                 if len(SectionList):
                     self.Section = SectionList[0]
@@ -53,30 +88,53 @@ class MyConfig(MyCommon):
             return
         self.InitComplete = True
 
-    # ---------------------MyConfig::HasOption-----------------------------------
-    def HasOption(self, Entry):
+    def HasOption(self, Entry: str) -> bool:
+        """
+        Checks if an option exists in the current section.
 
+        Args:
+            Entry (str): The option name.
+
+        Returns:
+            bool: True if the option exists, False otherwise.
+        """
         return self.config.has_option(self.Section, Entry)
 
-    # ---------------------MyConfig::GetList-------------------------------------
-    def GetList(self):
+    def GetList(self) -> Optional[List[Tuple[str, str]]]:
+        """
+        Returns a list of items in the current section.
+
+        Returns:
+            Optional[List[Tuple[str, str]]]: List of (name, value) pairs or None on error.
+        """
         try:
             return self.config.items(self.Section)
 
         except Exception as e1:
             self.LogErrorLine(
-                "Error in MyConfig:GetList: " + self.Section + ": " + str(e1)
+                "Error in MyConfig:GetList: " + str(self.Section) + ": " + str(e1)
             )
             return None
 
-    # ---------------------MyConfig::GetSections---------------------------------
-    def GetSections(self):
+    def GetSections(self) -> List[str]:
+        """
+        Returns a list of sections in the configuration file.
 
+        Returns:
+            List[str]: List of section names.
+        """
         return self.config.sections()
 
-    # ---------------------MyConfig::SetSection----------------------------------
-    def SetSection(self, section):
+    def SetSection(self, section: str) -> bool:
+        """
+        Sets the current working section.
 
+        Args:
+            section (str): The section name to switch to.
+
+        Returns:
+            bool: True if successful, False on error.
+        """
         if self.Simulation:
             return True
         if not (isinstance(section, str) or isinstance(section, unicode)) or not len(
@@ -89,14 +147,29 @@ class MyConfig(MyCommon):
         self.Section = section
         return True
 
-    # ---------------------MyConfig::ReadValue-----------------------------------
     def ReadValue(
-        self, Entry, return_type=str, default=None, section=None, NoLog=False
-    ):
+        self,
+        Entry: str,
+        return_type: Type = str,
+        default: Any = None,
+        section: Optional[str] = None,
+        NoLog: bool = False
+    ) -> Any:
+        """
+        Reads a value from the configuration.
 
+        Args:
+            Entry (str): The option name.
+            return_type (Type, optional): Expected type (str, bool, float, int). Defaults to str.
+            default (Any, optional): Default value if option is missing or error occurs.
+            section (str, optional): Section to read from (overrides current).
+            NoLog (bool, optional): If True, suppresses error logging.
+
+        Returns:
+            Any: The read value cast to the requested type, or the default value.
+        """
         try:
-
-            if section != None:
+            if section is not None:
                 self.SetSection(section)
 
             if self.config.has_option(self.Section, Entry):
@@ -120,7 +193,7 @@ class MyConfig(MyCommon):
             if not NoLog:
                 self.LogErrorLine(
                     "Error in MyConfig:ReadValue: "
-                    + self.Section
+                    + str(self.Section)
                     + ": "
                     + Entry
                     + ": "
@@ -128,10 +201,19 @@ class MyConfig(MyCommon):
                 )
             return default
 
-    # ---------------------MyConfig::WriteSection--------------------------------
-    # NOTE: This will remove comments from the config file
-    def alt_WriteSection(self, SectionName):
+    def alt_WriteSection(self, SectionName: str) -> bool:
+        """
+        Writes a new section to the configuration file (Alternate method).
 
+        NOTE: This method uses ConfigParser.write which will re-format the file
+        and remove comments.
+
+        Args:
+            SectionName (str): The name of the section to add.
+
+        Returns:
+            bool: True on success, False on error.
+        """
         if self.Simulation:
             return True
 
@@ -156,9 +238,16 @@ class MyConfig(MyCommon):
             self.LogErrorLine("Error in WriteSection: " + str(e1))
             return False
 
-    # ---------------------MyConfig::WriteSection--------------------------------
-    def WriteSection(self, SectionName):
+    def WriteSection(self, SectionName: str) -> bool:
+        """
+        Appends a new section to the configuration file.
 
+        Args:
+            SectionName (str): The name of the section to add.
+
+        Returns:
+            bool: True on success, False on error.
+        """
         if self.Simulation:
             return True
 
@@ -183,16 +272,34 @@ class MyConfig(MyCommon):
             self.LogErrorLine("Error in WriteSection: " + str(e1))
             return False
 
-    # ---------------------MyConfig::WriteValue----------------------------------
-    # NOTE: This will remove comments from the config file
-    def alt_WriteValue(self, Entry, Value, remove=False, section=None):
+    def alt_WriteValue(
+        self,
+        Entry: str,
+        Value: str,
+        remove: bool = False,
+        section: Optional[str] = None
+    ) -> bool:
+        """
+        Writes a value to the configuration file (Alternate method).
 
+        NOTE: This method uses ConfigParser.write which will re-format the file
+        and remove comments.
+
+        Args:
+            Entry (str): The option name.
+            Value (str): The value to write.
+            remove (bool, optional): Unused in this implementation.
+            section (str, optional): Section to write to.
+
+        Returns:
+            bool: True on success, False on error.
+        """
         if self.Simulation:
-            return
+            return False
 
         if not self.InitComplete:
             return False
-        if section != None:
+        if section is not None:
             self.SetSection(section)
 
         try:
@@ -212,83 +319,103 @@ class MyConfig(MyCommon):
             self.LogErrorLine("Error in WriteValue: " + str(e1))
             return False
 
-    # ---------------------MyConfig::WriteValue----------------------------------
-    def WriteValue(self, Entry, Value, remove=False, section=None):
+    def WriteValue(
+        self,
+        Entry: str,
+        Value: str,
+        remove: bool = False,
+        section: Optional[str] = None
+    ) -> bool:
+        """
+        Writes a value to the configuration file, preserving comments.
 
+        Parses the file line by line to find the section and entry, then updates
+        it or appends it.
+
+        Args:
+            Entry (str): The option name.
+            Value (str): The value to write.
+            remove (bool, optional): If True, does not write the entry (effectively removing it
+                if it's not written back, though current logic just skips adding it new).
+                Use with caution as the logic implies updating existing lines or adding new ones.
+            section (str, optional): Section to write to.
+
+        Returns:
+            bool: True on success, False on error.
+        """
         if self.Simulation:
-            return
+            return False
 
         if not self.InitComplete:
             return False
 
-        if section != None:
+        if section is not None:
             self.SetSection(section)
 
         SectionFound = False
         try:
             with self.CriticalLock:
                 Found = False
-                ConfigFile = open(self.FileName, "r")
-                FileString = ConfigFile.read()
-                ConfigFile.close()
+                with open(self.FileName, "r") as ConfigFile:
+                    FileString = ConfigFile.read()
 
                 # open in unbuffered mode
-                ConfigFile = open(self.FileName, "w")
-                for line in FileString.splitlines():
-                    if not line.isspace():  # blank lines
-                        newLine = line.strip()  # strip leading spaces
-                        if len(newLine):
-                            if not newLine[0] == "#":  # not a comment
-                                if not SectionFound and not self.LineIsSection(newLine):
-                                    ConfigFile.write(line + "\n")
-                                    continue
-
-                                if (
-                                    self.LineIsSection(newLine)
-                                    and self.Section.lower()
-                                    != self.GetSectionName(newLine).lower()
-                                ):
-                                    if (
-                                        SectionFound and not Found and not remove
-                                    ):  # we reached the end of the section
-                                        ConfigFile.write(Entry + " = " + Value + "\n")
-                                        Found = True
-                                    SectionFound = False
-                                    ConfigFile.write(line + "\n")
-                                    continue
-                                if (
-                                    self.LineIsSection(newLine)
-                                    and self.Section.lower()
-                                    == self.GetSectionName(newLine).lower()
-                                ):
-                                    SectionFound = True
-                                    ConfigFile.write(line + "\n")
-                                    continue
-
-                                if not SectionFound:
-                                    ConfigFile.write(line + "\n")
-                                    continue
-                                items = newLine.split(
-                                    "="
-                                )  # split items in line by spaces
-                                if len(items) >= 2:
-                                    items[0] = items[0].strip()
-                                    if items[0] == Entry:
-                                        if not remove:
-                                            ConfigFile.write(
-                                                Entry + " = " + Value + "\n"
-                                            )
-                                        Found = True
+                with open(self.FileName, "w") as ConfigFile:
+                    for line in FileString.splitlines():
+                        if not line.isspace():  # blank lines
+                            newLine = line.strip()  # strip leading spaces
+                            if len(newLine):
+                                if not newLine[0] == "#":  # not a comment
+                                    if not SectionFound and not self.LineIsSection(newLine):
+                                        ConfigFile.write(line + "\n")
                                         continue
 
-                    ConfigFile.write(line + "\n")
-                # if this is a new entry, then write it to the file, unless we are removing it
-                # this check is if there is not section below the one we are working in,
-                # it will be added to the end of the file
-                if not Found and not remove:
-                    ConfigFile.write(Entry + " = " + Value + "\n")
-                ConfigFile.flush()
-                ConfigFile.close()
+                                    if (
+                                        self.LineIsSection(newLine)
+                                        and self.Section.lower()
+                                        != self.GetSectionName(newLine).lower()
+                                    ):
+                                        if (
+                                            SectionFound and not Found and not remove
+                                        ):  # we reached the end of the section
+                                            ConfigFile.write(Entry + " = " + Value + "\n")
+                                            Found = True
+                                        SectionFound = False
+                                        ConfigFile.write(line + "\n")
+                                        continue
+                                    if (
+                                        self.LineIsSection(newLine)
+                                        and self.Section.lower()
+                                        == self.GetSectionName(newLine).lower()
+                                    ):
+                                        SectionFound = True
+                                        ConfigFile.write(line + "\n")
+                                        continue
+
+                                    if not SectionFound:
+                                        ConfigFile.write(line + "\n")
+                                        continue
+                                    items = newLine.split(
+                                        "="
+                                    )  # split items in line by spaces
+                                    if len(items) >= 2:
+                                        items[0] = items[0].strip()
+                                        if items[0] == Entry:
+                                            if not remove:
+                                                ConfigFile.write(
+                                                    Entry + " = " + Value + "\n"
+                                                )
+                                            Found = True
+                                            continue
+
+                        ConfigFile.write(line + "\n")
+                    # if this is a new entry, then write it to the file, unless we are removing it
+                    # this check is if there is not section below the one we are working in,
+                    # it will be added to the end of the file
+                    if not Found and not remove:
+                        ConfigFile.write(Entry + " = " + Value + "\n")
+                    ConfigFile.flush()
+
                 # update the read data that is cached
                 self.config.read(self.FileName)
             return True
@@ -297,9 +424,16 @@ class MyConfig(MyCommon):
             self.LogErrorLine("Error in WriteValue: " + str(e1))
             return False
 
-    # ---------------------MyConfig::GetSectionName------------------------------
-    def GetSectionName(self, Line):
+    def GetSectionName(self, Line: str) -> str:
+        """
+        Extracts the section name from a line (e.g., "[Section]").
 
+        Args:
+            Line (str): The line to parse.
+
+        Returns:
+            str: The section name without brackets, or empty string if invalid.
+        """
         if self.Simulation:
             return ""
         Line = Line.strip()
@@ -309,9 +443,16 @@ class MyConfig(MyCommon):
             return Line
         return ""
 
-    # ---------------------MyConfig::LineIsSection-------------------------------
-    def LineIsSection(self, Line):
+    def LineIsSection(self, Line: str) -> bool:
+        """
+        Checks if a line represents a section header.
 
+        Args:
+            Line (str): The line to check.
+
+        Returns:
+            bool: True if it's a section header, False otherwise.
+        """
         if self.Simulation:
             return False
         Line = Line.strip()

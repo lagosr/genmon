@@ -9,9 +9,16 @@
 # MODIFICATIONS:
 # -------------------------------------------------------------------------------
 
-from __future__ import (  # For python 3.x compatibility with print function
-    print_function,
-)
+"""
+Module for simulating Modbus communication.
+
+This module defines the `ModbusFile` class, which mimics a Modbus device
+by reading and writing register values from a text/JSON file. It is useful
+for testing and simulation without actual hardware.
+"""
+
+# For python 3.x compatibility with print function
+from __future__ import print_function
 
 import collections
 import datetime
@@ -19,23 +26,49 @@ import json
 import os
 import threading
 import time
+from typing import Optional, Any, Callable, List, Dict, Union
 
 from genmonlib.modbusbase import ModbusBase
 from genmonlib.mythread import MyThread
 
 
-# ------------ ModbusBase class -------------------------------------------------
+# ------------ ModbusFile class -------------------------------------------------
 class ModbusFile(ModbusBase):
+    """
+    Simulates a Modbus device using a file as the data source.
+
+    Attributes:
+        InputFile (str): Path to the file containing register data.
+        Registers (Dict): Cache of holding registers.
+        Strings (Dict): Cache of string registers.
+        FileData (Dict): Cache of file record data.
+        Coils (Dict): Cache of coils.
+        Inputs (Dict): Cache of input registers.
+        SimulateTime (bool): Flag to inject artificial delays.
+        CommAccessLock (threading.RLock): Lock for thread safety.
+        Threads (Dict): Dictionary of active threads.
+    """
+
     def __init__(
         self,
-        updatecallback,
-        address=0x9D,
-        name="/dev/serial",
-        rate=9600,
-        config=None,
-        inputfile=None,
+        updatecallback: Callable,
+        address: int = 0x9D,
+        name: str = "/dev/serial",
+        rate: int = 9600,
+        config: Any = None,
+        inputfile: Optional[str] = None,
     ):
+        """
+        Initializes the ModbusFile instance.
 
+        Args:
+            updatecallback (Callable): Callback to update register values.
+            address (int, optional): Modbus address. Defaults to 0x9D.
+            name (str, optional): Device name (unused in simulation). Defaults to "/dev/serial".
+            rate (int, optional): Baud rate (unused in simulation). Defaults to 9600.
+            config (Any, optional): Configuration object. Defaults to None.
+            inputfile (str, optional): Path to the simulation data file. Defaults to None.
+        """
         super(ModbusFile, self).__init__(
             updatecallback=updatecallback,
             address=address,
@@ -54,18 +87,17 @@ class ModbusFile(ModbusBase):
         self.TxPacketCount = 0
         self.ComTimoutError = 0
         self.TotalElapsedPacketeTime = 0
-        self.ComTimoutError = 0
         self.CrcError = 0
         self.SimulateTime = True
 
         self.ModbusStartTime = datetime.datetime.now()  # used for com metrics
-        self.Registers = {}
-        self.Strings = {}
-        self.FileData = {}
-        self.Coils = {}
-        self.Inputs = {}
+        self.Registers: Dict[str, str] = {}
+        self.Strings: Dict[str, str] = {}
+        self.FileData: Dict[str, str] = {}
+        self.Coils: Dict[str, str] = {}
+        self.Inputs: Dict[str, str] = {}
 
-        if self.InputFile == None:
+        if self.InputFile is None:
             self.InputFile = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)), "modbusregs.txt"
             )
@@ -91,9 +123,10 @@ class ModbusFile(ModbusBase):
             self.Threads["ReadInputFileThread"].Start()
         self.InitComplete = False
 
-    # -------------ModbusBase::ReadInputFileThread-------------------------------
-    def ReadInputFileThread(self):
-
+    def ReadInputFileThread(self) -> None:
+        """
+        Periodically re-reads the input file to update simulation data.
+        """
         while True:
             if self.IsStopSignaled("ReadInputFileThread"):
                 break
@@ -102,15 +135,45 @@ class ModbusFile(ModbusBase):
                 self.LogInfo("Error parsing input data")
             time.sleep(5)
 
-    # -------------ModbusBase::ProcessWriteTransaction---------------------------
-    def ProcessWriteTransaction(self, Register, Length, Data, IsCoil = False):
+    def ProcessWriteTransaction(
+        self, Register: str, Length: int, Data: List[int], IsCoil: bool = False
+    ) -> None:
+        """
+        Stub for processing write transactions.
+
+        Currently does not update the internal state or file.
+
+        Args:
+            Register (str): Register address.
+            Length (int): Data length.
+            Data (List[int]): Data payload.
+            IsCoil (bool, optional): True if coil write. Defaults to False.
+        """
         return
 
-    # -------------ModbusBase::ProcessTransaction--------------------------------
     def ProcessTransaction(
-        self, Register, Length, skipupdate=False, ReturnString=False, IsCoil = False, IsInput = False
-    ):
+        self,
+        Register: str,
+        Length: int,
+        skipupdate: bool = False,
+        ReturnString: bool = False,
+        IsCoil: bool = False,
+        IsInput: bool = False
+    ) -> str:
+        """
+        Simulates a read transaction by fetching data from internal caches.
 
+        Args:
+            Register (str): Register address.
+            Length (int): Read length.
+            skipupdate (bool, optional): Skip callback update. Defaults to False.
+            ReturnString (bool, optional): Return data as string. Defaults to False.
+            IsCoil (bool, optional): Read coil. Defaults to False.
+            IsInput (bool, optional): Read input register. Defaults to False.
+
+        Returns:
+            str: The register value.
+        """
         # TODO need more validation
 
         if ReturnString:
@@ -118,14 +181,13 @@ class ModbusFile(ModbusBase):
         else:
             RegValue = self.Strings.get(Register, None)
 
-            if RegValue == None:
+            if RegValue is None:
                 if IsCoil:
                     RegValue = self.Coils.get(Register, "")
                 elif IsInput:
                     RegValue = self.Inputs.get(Register, "")
                 else:
                     RegValue = self.Registers.get(Register, "")
-                    
 
                 if len(RegValue):
                     while len(RegValue) != Length * 4:
@@ -141,18 +203,34 @@ class ModbusFile(ModbusBase):
             time.sleep(0.02)
 
         if not skipupdate:
-            if not self.UpdateRegisterList == None:
+            if self.UpdateRegisterList is not None:
                 self.UpdateRegisterList(
                     Register, RegValue, IsFile=False, IsString=ReturnString
                 )
 
         return RegValue
 
-    # -------------ModbusProtocol::ProcessFileReadTransaction---------
     def ProcessFileReadTransaction(
-        self, Register, Length, skipupdate=False, file_num=1, ReturnString=False
-    ):
+        self,
+        Register: str,
+        Length: int,
+        skipupdate: bool = False,
+        file_num: int = 1,
+        ReturnString: bool = False
+    ) -> str:
+        """
+        Simulates a file read transaction.
 
+        Args:
+            Register (str): File record number.
+            Length (int): Length to read.
+            skipupdate (bool, optional): Skip callback update. Defaults to False.
+            file_num (int, optional): File number. Defaults to 1.
+            ReturnString (bool, optional): Return as string. Defaults to False.
+
+        Returns:
+            str: The file data.
+        """
         RegValue = self.FileData.get(Register, "")
 
         self.TxPacketCount += 1
@@ -162,16 +240,20 @@ class ModbusFile(ModbusBase):
 
         RegValue = self.FileData.get(Register, "")
         if not skipupdate:
-            if not self.UpdateRegisterList == None:
+            if self.UpdateRegisterList is not None:
                 self.UpdateRegisterList(
                     Register, RegValue, IsFile=True, IsString=ReturnString
                 )
 
         return RegValue
 
-    # ----------  AdjustInputData  ----------------------------------------------
-    def AdjustInputData(self):
+    def AdjustInputData(self) -> bool:
+        """
+        Ensures register data is correctly formatted (padded/converted).
 
+        Returns:
+            bool: True if successful, False otherwise.
+        """
         if not len(self.Registers):
             self.LogError("Error in AdjustInputData, no data.")
             return False
@@ -198,9 +280,16 @@ class ModbusFile(ModbusBase):
                     )
         return True
 
-    # ----------  ReadJSONFile  -------------------------------------------------
-    def ReadJSONFile(self, FileName):
+    def ReadJSONFile(self, FileName: str) -> bool:
+        """
+        Reads simulation data from a JSON file.
 
+        Args:
+            FileName (str): Path to JSON file.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
         if not len(FileName):
             self.LogError("Error in  ReadJSONFile: No Input File")
             return False
@@ -219,13 +308,20 @@ class ModbusFile(ModbusBase):
                 else:
                     self.Inputs = {}
             return True
-        except Exception as e1:
+        except Exception:
             # self.LogErrorLine("Error in ReadJSONFile: " + str(e1))
             return False
 
-    # ----------  GeneratorDevice:ReadInputFile  --------------------------------
-    def ReadInputFile(self, FileName):
+    def ReadInputFile(self, FileName: str) -> bool:
+        """
+        Reads simulation data from a text or JSON file.
 
+        Args:
+            FileName (str): Path to the input file.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
         REGISTERS = 0
         STRINGS = 1
         FILE_DATA = 2
@@ -263,29 +359,25 @@ class ModbusFile(ModbusBase):
                                 if len(RegEntry[0]) and len(RegEntry[1]):
                                     try:
                                         if Section == REGISTERS:
-                                            HexVal = int(RegEntry[0], 16)
-                                            HexVal = int(RegEntry[1], 16)
-                                            # self.LogError("REGISTER: <" + RegEntry[0] + ": " + RegEntry[1] + ">")
+                                            # Just validation
+                                            int(RegEntry[0], 16)
+                                            int(RegEntry[1], 16)
                                             self.Registers[RegEntry[0]] = RegEntry[1]
 
-                                    except:
+                                    except Exception:
                                         continue
                     elif Section == STRINGS:
                         Items = line.split(" : ")
                         if len(Items) == 2:
-                            # self.LogError("STRINGS: <" + Items[0] + ": " + Items[1] + ">")
                             self.Strings[Items[0]] = Items[1]
                         else:
                             pass
-                            # self.LogError("Error in STRINGS: " + str(Items))
                     elif Section == FILE_DATA:
                         Items = line.split(" : ")
                         if len(Items) == 2:
-                            # self.LogError("FILEDATA: <" + Items[0] + ": " + Items[1] + ">")
                             self.FileData[Items[0]] = Items[1]
                         else:
                             pass
-                            # self.LogError("Error in FILEDATA: " + str(Items))
 
             return True
 
@@ -293,8 +385,13 @@ class ModbusFile(ModbusBase):
             self.LogErrorLine("Error in  ReadInputFile: " + str(e1))
             return False
 
-    # ---------- ModbusBase::GetCommStats---------------------------------------
-    def GetCommStats(self):
+    def GetCommStats(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves communication statistics (simulated).
+
+        Returns:
+            List[Dict[str, Any]]: List of stats dictionaries.
+        """
         SerialStats = []
 
         SerialStats.append(
@@ -330,19 +427,24 @@ class ModbusFile(ModbusBase):
 
         return SerialStats
 
-    # ---------- ModbusBase::ResetCommStats-------------------------------------
-    def ResetCommStats(self):
+    def ResetCommStats(self) -> None:
+        """
+        Resets communication statistics.
+        """
         self.RxPacketCount = 0
         self.TxPacketCount = 0
         self.TotalElapsedPacketeTime = 0
         self.ModbusStartTime = datetime.datetime.now()  # used for com metrics
         pass
 
-    # ------------ModbusBase::Flush----------------------------------------------
-    def Flush(self):
+    def Flush(self) -> None:
+        """
+        Flushes buffers (Stub).
+        """
         pass
 
-    # ------------ModbusBase::Close----------------------------------------------
-    def Close(self):
-
+    def Close(self) -> None:
+        """
+        Closes the simulation (Stub).
+        """
         pass
